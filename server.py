@@ -18,6 +18,7 @@ class Folders(Base):
   name = Column(String, unique=True)
   notes = relationship('Notes', uselist=True)
 
+  # converts folder instance into a dictionary
   def as_dictionary(self):
       folder = {
           "id": self.id,
@@ -66,36 +67,62 @@ def accept(mimetype):
 @app.route('/api/notes', methods=['GET'])
 def get_notes():
   notes = session.query(Notes).all()
+
+  # list comprehension syntax
+  # converts sql alchemy query results into a list of dictionaries
   notes = [note.as_dictionary() for note in notes]
+
+  # jsonify converts the list of notes into a json string and returns a response with a json content-type
   return jsonify(notes)
+
+
+# <id> is the dynamic path segment for note id
+# integer type set for id path argument 
+# returns 404 when a string value provided
+@app.route('/api/notes/<int:id>', methods=['GET'])
+def get_note(id):
+
+  note = session.query(Notes).filter(Notes.id==id).first()
+
+  if not note:
+    return jsonify({'message': 'Note with this id does not exist'}), 404
+
+  return jsonify(note.as_dictionary())
 
 
 @app.route('/api/notes', methods=['POST'])
 @accept("application/json")
 def post_note():
-  data = request.json
-  title = data['title']
 
-  # use dictionary's get method instead of using brackets to search for key
+  # uses get method instead of using brackets syntax to search for keys in request.json dictionary
   # get method returns None if key does not exist, brackets syntax raises KeyError if key does not exist
-  folder_id = data.get('folder_id')
 
+  data = request.json
+
+  title = data.get('title')
+  folder_id = data.get('folder_id')
+  content = data.get('content')
+
+  # None and empty string are both falsey in Python
+  # returns 400 if title key is missing or value of title key is an empty string
   if not title:
     return jsonify({'message': 'Note name is required'}), 400
 
+  # in keyword checks if folder_id key is in data dictionary
+  # folder_id is optional, does not return 400 if folder_id key is missing
   if 'folder_id' in data:
     folder = session.query(Folders).filter(Folders.id==folder_id).first()
     if not folder:
       return jsonify({ 'message': 'Folder id is not valid'}), 400
 
-  note = Notes(title=title, content=data['content'], folder_id=folder_id)
+  note = Notes(title=title, content=content, folder_id=folder_id)
   session.add(note)
   session.commit()
   return jsonify(note.as_dictionary()), 201
 
 @app.route('/api/notes/<int:id>', methods=['DELETE'])
 def delete_note(id):
-
+ 
   note = session.query(Notes).filter(Notes.id==id).first()
 
   if not note:
@@ -136,9 +163,6 @@ def post_folder():
   return jsonify(folder.as_dictionary()), 201
 
 
-# <id> is the dynamic path segment for folder id
-# integer type set for id path argument 
-# returns 404 when a string value provided
 @app.route('/api/folders/<int:id>', methods=['DELETE'])
 @accept('application/json')
 def delete_folder(id):
