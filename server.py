@@ -107,8 +107,25 @@ def post_folder():
     session.add(folder)
     session.commit()
   except IntegrityError:
-    return Response(json.dumps({'message': 'Folder name already exists'}), 400, mimetype='application/json')
-  return Response(folder.as_dictionary, 201, mimetype='application/json')
+    session.rollback()
+    return jsonify({'message': 'Folder name already exists'}), 400
+  return jsonify(folder.as_dictionary()), 201
+
+
+# <id> is the dynamic path segment for folder id
+@app.route('/api/folders/<id>', methods=['DELETE'])
+@accept('application/json')
+def delete_folder(id):
+  #the id path argument is passed to this view function
+
+  folder = session.query(Folders).filter(Folders.id==id).first()
+
+  if not folder:
+    return jsonify({'message': 'This folder does not exist'}), 404
+
+  session.delete(folder)
+  session.commit()
+  return '', 204
 
 if __name__ == "__main__":
   app.run()
