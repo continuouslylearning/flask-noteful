@@ -114,7 +114,7 @@ def update_note(id):
       return jsonify({ 'message': 'Folder id is not valid'}), 400
 
   updated_note = session.query(Notes).filter(Notes.id==id).first()
-  
+
   if not updated_note:
     return jsonify({'message': 'Note with this id does not exist'}), 400
 
@@ -180,6 +180,32 @@ def get_folder(id):
 
   return jsonify(folder.as_dictionary())
 
+@app.route('/api/folders/<int:id>', methods=['PUT'])
+@accept('application/json')
+def update_folder(id):
+
+  name = request.json.get('name')
+
+  # folder name is required, returns 400 if name key is missing or an empty string
+  if not name:
+    return jsonify({'message': 'Folder name is missing'}), 400
+  
+  updated_folder = session.query(Folders).filter(Folders.id==id).first()
+  
+  # updated_folder variable is None if a folder with given id is not found
+  if not updated_folder:
+    return jsonify({'message': 'Folder with this id does not exist'}), 400
+
+  try: 
+    updated_folder.name = name
+    session.commit()
+
+  except IntegrityError:
+    # IntegrityError is thrown when sqlalchemy tries to insert a duplicate name
+    session.rollback()
+    return jsonify({'message': 'Folder name already exists'}), 400
+
+  return jsonify(updated_folder.as_dictionary()), 201
 
 @app.route('/api/folders', methods=['POST'])
 @accept("application/json")
@@ -196,10 +222,11 @@ def post_folder():
   try:
     session.add(folder)
     session.commit()
+
   except IntegrityError:
-    ## sqlalchemy raises an IntegrityError for duplicate values
     session.rollback()
     return jsonify({'message': 'Folder name already exists'}), 400
+
   return jsonify(folder.as_dictionary()), 201
 
 
