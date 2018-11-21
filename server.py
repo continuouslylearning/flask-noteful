@@ -93,12 +93,7 @@ def get_note(id):
 @app.route('/api/notes/<id>', methods=['PUT'])
 @accept('application/json')
 def update_note(id):
-  return "test"
-
-@app.route('/api/notes', methods=['POST'])
-@accept('application/json')
-def post_note():
-
+  
   # uses get method instead of using brackets syntax to search for keys in request.json dictionary
   # get method returns None if key does not exist, brackets syntax raises KeyError if key does not exist
 
@@ -110,6 +105,36 @@ def post_note():
 
   # None and empty string are both falsey in Python
   # returns 400 if title key is missing or value of title key is an empty string
+  if not title:
+    return jsonify({'message': 'Note name is required'}), 400
+  
+  if 'folder_id' in data:
+    folder = session.query(Folders).filter(Folders.id==folder_id).first()
+    if not folder:
+      return jsonify({ 'message': 'Folder id is not valid'}), 400
+
+  updated_note = session.query(Notes).filter(Notes.id==id).first()
+  
+  if not updated_note:
+    return jsonify({'message': 'Note with this id does not exist'}), 400
+
+  updated_note.title = title
+  updated_note.folder_id = folder_id
+  updated_note.content = content 
+  session.commit()
+
+  return jsonify(updated_note.as_dictionary()), 201
+
+@app.route('/api/notes', methods=['POST'])
+@accept('application/json')
+def post_note():
+
+  data = request.json
+
+  title = data.get('title')
+  folder_id = data.get('folder_id')
+  content = data.get('content')
+
   if not title:
     return jsonify({'message': 'Note name is required'}), 400
 
