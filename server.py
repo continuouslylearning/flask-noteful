@@ -83,6 +83,11 @@ def post_note():
   session.commit()
   return ''
 
+@app.route('/api/notes/<int:id>', methods=['DELETE'])
+def delete_note(id):
+
+  return "test"
+
 # folder endpoints
 
 @app.route('/api/folders', methods=['GET'])
@@ -113,7 +118,9 @@ def post_folder():
 
 
 # <id> is the dynamic path segment for folder id
-@app.route('/api/folders/<id>', methods=['DELETE'])
+# integer type set for id path argument 
+# returns 404 when a string argument provided
+@app.route('/api/folders/<int:id>', methods=['DELETE'])
 @accept('application/json')
 def delete_folder(id):
   #the id path argument is passed to this view function
