@@ -4,8 +4,16 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Foreign
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
+import os
 
-engine = create_engine('postgres://wctgxite:AoufCZFn17xivpL74SSpfxCEoDdPgB2h@pellefant.db.elephantsql.com:5432/wctgxite')
+# Flask app instance
+app = Flask(__name__, static_url_path='')
+
+# read URI for postgres database from environment variable
+DB_URI = os.environ.get("DB_URI", default=None)
+
+# set up for sqlalchemy session
+engine = create_engine(DB_URI)
 Session = sessionmaker(bind=engine)
 session = Session()
 Base = declarative_base()
@@ -36,18 +44,32 @@ class Notes(Base):
   folder_id = Column(Integer, ForeignKey(Folders.id), nullable=True)
 
   def as_dictionary(self):
-    folder = {
+    note = {
         "id": self.id,
         "title": self.title,
         "content": self.content,
         "folder_id": self.folder_id
     }
-    return folder
+    return note
 
+class Tags(Base):
+  __tablename__ = 'tags'
+
+  id = Column(Integer, primary_key=True)
+  name = Column(String, nullable=False, unique=True)
+
+  def as_dictionary(self):
+    tag = {
+      "id": self.id,
+      "name": self.name
+    }
+    return tag
 
 Base.metadata.create_all(engine)
 
-app = Flask(__name__)
+@app.route('/')
+def root():
+    return app.send_static_file('index.html')
 
 # decorators
 def accept(mimetype):
@@ -163,6 +185,7 @@ def delete_note(id):
 
   return '', 204
 
+
 # Folders endpoints
 
 @app.route('/api/folders', methods=['GET'])
@@ -229,7 +252,6 @@ def post_folder():
 
   return jsonify(folder.as_dictionary()), 201
 
-
 @app.route('/api/folders/<int:id>', methods=['DELETE'])
 @accept('application/json')
 def delete_folder(id):
@@ -243,6 +265,8 @@ def delete_folder(id):
   session.delete(folder)
   session.commit()
   return '', 204
+
+# Tags endpoints
 
 if __name__ == "__main__":
   app.run()
