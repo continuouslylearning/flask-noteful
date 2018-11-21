@@ -73,7 +73,12 @@ def get_notes():
 @accept("application/json")
 def post_note():
   data = request.json
-  note = Notes(title=data['title'], content=data['content'])
+  title = data['title']
+
+  if not title:
+    return jsonify({'message': 'Note title is missing'}), 400
+
+  note = Notes(title=title, content=data['content'])
   session.add(note)
   session.commit()
   return ''
@@ -90,7 +95,14 @@ def get_folders():
 @accept("application/json")
 def post_folder():
   data = request.json
-  folder = Folders(name=data['name'])
+  name = data['name']
+
+  # empty strings are falsey in Python
+  if not name:
+    return jsonify({'message': 'Folder name is missing'}), 400
+
+  folder = Folders(name=name)
+
   try:
     session.add(folder)
     session.commit()
