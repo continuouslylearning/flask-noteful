@@ -37,8 +37,9 @@ class Notes(Base):
   def as_dictionary(self):
     folder = {
         "id": self.id,
-        "name": self.title,
-        "content": self.content
+        "title": self.title,
+        "content": self.content,
+        "folder_id": self.folder_id
     }
     return folder
 
@@ -61,7 +62,7 @@ def accept(mimetype):
     return decorator
 
 
-# Note endpoints
+# Notes endpoints
 @app.route('/api/notes', methods=['GET'])
 def get_notes():
   notes = session.query(Notes).all()
@@ -75,20 +76,37 @@ def post_note():
   data = request.json
   title = data['title']
 
-  if not title:
-    return jsonify({'message': 'Note title is missing'}), 400
+  # use dictionary's get method instead of using brackets to search for key
+  # get method returns None if key does not exist, brackets syntax raises KeyError if key does not exist
+  folder_id = data.get('folder_id')
 
-  note = Notes(title=title, content=data['content'])
+  if not title:
+    return jsonify({'message': 'Note name is required'}), 400
+
+  if 'folder_id' in data:
+    folder = session.query(Folders).filter(Folders.id==folder_id).first()
+    if not folder:
+      return jsonify({ 'message': 'Folder id is not valid'}), 400
+
+  note = Notes(title=title, content=data['content'], folder_id=folder_id)
   session.add(note)
   session.commit()
-  return ''
+  return jsonify(note.as_dictionary()), 201
 
 @app.route('/api/notes/<int:id>', methods=['DELETE'])
 def delete_note(id):
 
-  return "test"
+  note = session.query(Notes).filter(Notes.id==id).first()
 
-# folder endpoints
+  if not note:
+    return jsonify({'message': 'Note with this id does not exist'}), 404
+  
+  session.delete(note)
+  session.commit()
+
+  return '', 204
+
+# Folders endpoints
 
 @app.route('/api/folders', methods=['GET'])
 def get_folders():
@@ -112,6 +130,7 @@ def post_folder():
     session.add(folder)
     session.commit()
   except IntegrityError:
+    ## sqlalchemy raises an IntegrityError for duplicate values
     session.rollback()
     return jsonify({'message': 'Folder name already exists'}), 400
   return jsonify(folder.as_dictionary()), 201
@@ -119,7 +138,7 @@ def post_folder():
 
 # <id> is the dynamic path segment for folder id
 # integer type set for id path argument 
-# returns 404 when a string argument provided
+# returns 404 when a string value provided
 @app.route('/api/folders/<int:id>', methods=['DELETE'])
 @accept('application/json')
 def delete_folder(id):
@@ -128,7 +147,7 @@ def delete_folder(id):
   folder = session.query(Folders).filter(Folders.id==id).first()
 
   if not folder:
-    return jsonify({'message': 'This folder does not exist'}), 404
+    return jsonify({'message': 'Folder does not exist'}), 404
 
   session.delete(folder)
   session.commit()
