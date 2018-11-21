@@ -286,7 +286,21 @@ def get_tag():
 
 @app.route('/api/tags', methods=['POST'])
 def create_tag():
-  return 'Coming soon'
+  name = request.json.get('name')
+
+  if not name:
+    return jsonify({'message': 'Tag name is requierd'}), 400
+  
+  tag = Tags(name=name)
+
+  try:
+    session.add(tag)
+    session.commit()
+  except IntegrityError:
+    session.rollback()
+    return jsonify({'message': 'Tag name already exists'}), 400
+  
+  return jsonify(tag.as_dictionary()), 201
 
 if __name__ == "__main__":
   app.run()
