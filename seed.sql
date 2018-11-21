@@ -87,10 +87,10 @@ INSERT INTO notes (title, content, folder_id) VALUES
   );
 
 
--- INSERT INTO tags (name) VALUES
--- ('Fizz Buzz'),
--- ('Foo Bar'),
--- ('Dummy');
+INSERT INTO tags (name) VALUES
+('Fizz Buzz'),
+('Foo Bar'),
+('Dummy');
 
 -- INSERT INTO notes_tags (note_id, tag_id) VALUES
 -- (1000, 1),

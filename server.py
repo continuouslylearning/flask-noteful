@@ -266,7 +266,27 @@ def delete_folder(id):
   session.commit()
   return '', 204
 
+
 # Tags endpoints
+
+@app.route('/api/tags', methods=['GET'])
+def get_tags():
+  tags = session.query(Tags).all()
+  tags = [tag.as_dictionary() for tag in tags]
+  
+  return jsonify(tags)
+
+@app.route('/api/tags/<int:id>', methods=['GET'])
+def get_tag():
+  tag = session.query(Tags).filter(Tags.id==id).first()
+  if not tag:
+    return jsonify({'message': 'Tag with this id does not exist'}), 404
+
+  return jsonify(tag.as_dictionary()), 200
+
+@app.route('/api/tags', methods=['POST'])
+def create_tag():
+  return 'Coming soon'
 
 if __name__ == "__main__":
   app.run()
