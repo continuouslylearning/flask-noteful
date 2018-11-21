@@ -90,8 +90,13 @@ def get_note(id):
   return jsonify(note.as_dictionary())
 
 
+@app.route('/api/notes/<id>', methods=['PUT'])
+@accept('application/json')
+def update_note(id):
+  return "test"
+
 @app.route('/api/notes', methods=['POST'])
-@accept("application/json")
+@accept('application/json')
 def post_note():
 
   # uses get method instead of using brackets syntax to search for keys in request.json dictionary
@@ -140,6 +145,16 @@ def get_folders():
   folders = session.query(Folders).all()
   folders = [folder.as_dictionary() for folder in folders]
   return jsonify(folders)
+
+@app.route('/api/folders/<int:id>', methods=['GET'])
+def get_folder(id):
+  folder = session.query(Folders).filter(Folders.id==id).first()
+
+  if not folder:
+    return jsonify({'message': 'Folder with this id does not exist'}), 404
+
+  return jsonify(folder.as_dictionary())
+
 
 @app.route('/api/folders', methods=['POST'])
 @accept("application/json")
