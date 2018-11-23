@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Foreign
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import BYTEA
 import os
 import jwt
 import bcrypt
@@ -90,7 +91,7 @@ class Users(Base):
   # unique constraint on username attribute
   # username and password are required fields but firstname and lastname are not
   username = Column(String, nullable=False, unique=True)
-  password = Column(String, nullable=False)
+  password = Column(BYTEA, nullable=False)
   firstname = Column(String, nullable=True)
   lastname = Column(String, nullable=True)
 
@@ -99,6 +100,10 @@ class Users(Base):
   def hashpassword(password):
     # hash the given password with a salt factor of 10
     return bcrypt.hashpw(password.encode('utf8'), bcrypt.gensalt())
+
+  def validatepassword(self,password):
+    print(self.password)
+    return bcrypt.checkpw(password.encode('utf8'), self.password)
 
   def as_dictionary(self):
     
@@ -397,6 +402,15 @@ def login():
   username = request.json.get('username')
   password = request.json.get('password')
 
+  user = session.query(Users).filter(Users.username==username).first()
+  if not user:
+    return jsonify({'message': 'Username is invalid'})
+
+  is_valid = user.validatepassword(password)
+
+  if not is_valid:
+    return jsonify({'message': 'Password is incorrect'})
+  
 
 
   return "test"
