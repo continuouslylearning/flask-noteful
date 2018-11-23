@@ -14,6 +14,7 @@ app = Flask(__name__, static_url_path='')
 
 # read URI for postgres database from  'DBI_URI' environment variable
 DB_URI = os.environ.get("DB_URI", default=None)
+JWT_SECRET = os.environ.get("JWT_SECRET", default=None)
 
 # set up for sqlalchemy session
 engine = create_engine(DB_URI)
@@ -411,9 +412,9 @@ def login():
   if not is_valid:
     return jsonify({'message': 'Password is incorrect'})
   
+  auth_token = jwt.encode({ 'user': user.as_dictionary()}, JWT_SECRET, algorithm='HS256' )
 
-
-  return "test"
+  return jsonify({'authToken': auth_token.decode('utf8')}), 201
 
 
 
