@@ -9,7 +9,7 @@ import os
 # Flask app instance
 app = Flask(__name__, static_url_path='')
 
-# read URI for postgres database from environment variable
+# read URI for postgres database from  'DBI_URI' environment variable
 DB_URI = os.environ.get("DB_URI", default=None)
 
 # set up for sqlalchemy session
@@ -22,6 +22,7 @@ Base = declarative_base()
 class Folders(Base):
   __tablename__ = 'folders'
   
+  # defines schema for folders table
   id = Column(Integer, primary_key=True)
   name = Column(String, unique=True)
   notes = relationship('Notes', uselist=True)
@@ -38,10 +39,15 @@ class Folders(Base):
 class Notes(Base):
   __tablename__ = 'notes'
 
+  # folder id is set as a foreign key in the notes table
+  # by default, when a folder is deleted, folder id in related notes are set to null 
   id = Column(Integer, primary_key=True)
   title = Column(String, nullable=False)
   content = Column(String, nullable=True)
   folder_id = Column(Integer, ForeignKey(Folders.id), nullable=True)
+  # specify delete on cascade constraint for records in 'note_tags' table
+  # when note is deleted, referencing records in note_tags are deleted
+  notes_tags = relationship('Note_tags', cascade='delete')
 
   def as_dictionary(self):
     note = {
@@ -57,6 +63,8 @@ class Tags(Base):
 
   id = Column(Integer, primary_key=True)
   name = Column(String, nullable=False, unique=True)
+  # delete on cascade constraint for note tags
+  notes_tags = relationship('Note_tags', cascade='delete')
 
   def as_dictionary(self):
     tag = {
@@ -64,6 +72,30 @@ class Tags(Base):
       "name": self.name
     }
     return tag
+
+# notes and tags cardinality is many-to-many so must create a 'note_tags' join table
+class Note_tags(Base):
+  __tablename__ = 'note_tags'
+
+  # define a composite primary key consisting of two columns
+  note_id = Column(Integer, ForeignKey(Notes.id), nullable=False, primary_key=True)
+  tag_id = Column(Integer, ForeignKey(Tags.id), nullable=False, primary_key=True)
+
+class Users(Base):
+  __tablename__ = 'users'
+
+  id = Column(Integer, nullable=False, primary_key=True)
+  # unique constraint on username attribute
+  username = Column(String, nullable=False, unique=True)
+  password = Column(String, nullable=False)
+
+  def as_dictionary(self):
+    user = {
+      "id": self.id,
+      "username": self.username
+    }
+    return user
+
 
 Base.metadata.create_all(engine)
 
@@ -76,7 +108,10 @@ def accept(mimetype):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if mimetype in request.accept_mimetypes:
+            # if mimetype in request.accept_mimetypes:
+            if request.content_type == mimetype:
+                print(mimetype)
+                print(request.accept_mimetypes)
                 return func(*args, **kwargs)
             message = "Request must accept {} data".format(mimetype)
             data = json.dumps({"message": message})
@@ -194,6 +229,7 @@ def get_folders():
   folders = [folder.as_dictionary() for folder in folders]
   return jsonify(folders)
 
+
 @app.route('/api/folders/<int:id>', methods=['GET'])
 def get_folder(id):
   folder = session.query(Folders).filter(Folders.id==id).first()
@@ -221,10 +257,12 @@ def update_folder(id):
 
   try: 
     updated_folder.name = name
+    # commit attempts to push the changes to the database
     session.commit()
 
   except IntegrityError:
     # IntegrityError is thrown when sqlalchemy tries to insert a duplicate name
+    # rollback discards the unflushed changes to the folder object in the session
     session.rollback()
     return jsonify({'message': 'Folder name already exists'}), 400
 
@@ -277,14 +315,35 @@ def get_tags():
   return jsonify(tags)
 
 @app.route('/api/tags/<int:id>', methods=['GET'])
-def get_tag():
+def get_tag(id):
   tag = session.query(Tags).filter(Tags.id==id).first()
   if not tag:
     return jsonify({'message': 'Tag with this id does not exist'}), 404
 
   return jsonify(tag.as_dictionary()), 200
 
+@app.route('/api/tags/<int:id>', methods=['PUT'])
+@accept('application/json')
+def update_tag(id):
+  name = request.json.get('name')
+  if not name:
+    return jsonify({'message': 'Tag name is required'}), 404
+  
+  tag = session.query(Tags).filter(Tags.id==id).first()
+  if not tag:
+    return jsonify({'message': 'Tag with this id does not exist'}), 404
+  
+  try:
+    tag.name = name
+    session.commit()
+  except IntegrityError:
+    session.rollback()
+    return jsonify({'message': 'Tag name already exists'}), 400
+
+  return jsonify(tag.as_dictionary()), 201
+
 @app.route('/api/tags', methods=['POST'])
+@accept('application/json')
 def create_tag():
   name = request.json.get('name')
 
@@ -296,11 +355,23 @@ def create_tag():
   try:
     session.add(tag)
     session.commit()
+
   except IntegrityError:
     session.rollback()
     return jsonify({'message': 'Tag name already exists'}), 400
   
   return jsonify(tag.as_dictionary()), 201
+
+@app.route('/api/tags/<int:id>', methods=['DELETE'])
+def delete_tag(id):
+  tag = session.query(Tags).filter(Tags.id==id).first()
+  
+  if not tag:
+    return jsonify({'message': 'Tag with this id does not exist'}), 404
+  
+  session.delete(tag)
+  session.commit()
+  return '', 204
 
 if __name__ == "__main__":
   app.run()

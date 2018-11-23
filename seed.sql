@@ -92,8 +92,8 @@ INSERT INTO tags (name) VALUES
 ('Foo Bar'),
 ('Dummy');
 
--- INSERT INTO notes_tags (note_id, tag_id) VALUES
--- (1000, 1),
--- (1000, 2),
--- (1001, 2),
--- (1002, 1);
+INSERT INTO note_tags (note_id, tag_id) VALUES
+(1001, 1),
+(1011, 2),
+(1001, 2),
+(1002, 1);
