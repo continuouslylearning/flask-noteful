@@ -5,6 +5,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 import os
+import jwt
+import bcrypt
 
 # Flask app instance
 app = Flask(__name__, static_url_path='')
@@ -92,7 +94,15 @@ class Users(Base):
   firstname = Column(String, nullable=True)
   lastname = Column(String, nullable=True)
 
+  # declare a static method with @staticmethod decorator
+  @staticmethod
+  def hashpassword(password):
+    # hash the given password with a salt factor of 10
+    return bcrypt.hashpw(password.encode('utf8'), bcrypt.gensalt())
+
   def as_dictionary(self):
+    
+    #make sure not to return the password in dictionary form
     user = {
       "id": self.id,
       "username": self.username,
@@ -378,15 +388,32 @@ def delete_tag(id):
   session.commit()
   return '', 204
 
+
+@app.route('/auth/login', methods=['POST'])
+@accept('application/json')
+def login():
+
+  # this endpoint signs and returns a json web token when provided a valid username and password
+  username = request.json.get('username')
+  password = request.json.get('password')
+
+
+
+  return "test"
+
+
+
 @app.route('/api/users', methods=['POST'])
 @accept('application/json')
 def create_user():
+
+  # this endpoint creates new user accounts
+
   username = request.json.get('username')
   password = request.json.get('password')
   firstname = request.json.get('firstname')
   lastname = request.json.get('lastname')
 
-  new_user = Users(username=username, password=password, firstname=firstname, lastname=lastname)
   user_dict = {
     'username': username,
     'password': password,
@@ -436,12 +463,15 @@ def create_user():
       max = size.get('max')
       break
   
-  if too_small:
-    return jsonify({'message': f'{too_small} must be at least {min} characters long'}), 400
-  
-  if too_large:
-    return jsonify({'message': f'{too_large} must be at most {max} characters long'}), 400
+  # 3.6 Python 'f-string' syntax
+  # f-string syntax evaluates expressions inside curly braces
+  if too_small or too_large:
+    return jsonify({'message': f'{too_small or too_large} must be at {"least" if too_small else "most"} {min if too_small else max} characters long'}), 400
 
+  # hash the password before pushing a new user into the database
+  new_user = Users(username=username, password=Users.hashpassword(password), firstname=firstname, lastname=lastname)
+
+  # search database for an existing user with the same username
   user = session.query(Users).filter(Users.username==username).first()
 
   if user:
@@ -451,6 +481,8 @@ def create_user():
   session.commit()
   
   return jsonify(new_user.as_dictionary()), 201
+
+
 
 if __name__ == "__main__":
   app.run()
