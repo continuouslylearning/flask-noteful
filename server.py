@@ -140,6 +140,37 @@ def accept(mimetype):
         return wrapper
     return decorator
 
+def jwt_auth():
+  def decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+      # returns a new json web token when provided a valid token
+
+      # look for auth token in authorization header
+      bearer_token = request.headers.get('Authorization')
+
+      if not bearer_token:
+        return jsonify({'message': 'Authorization header is missing'}), 401
+
+      # authorization header should conform to bearer scheme
+      bearer_token = bearer_token.split(' ')
+      scheme = bearer_token[0]
+      token = bearer_token[1]
+
+      # return 401 if request does not contain a proper bearer token
+      if scheme != 'Bearer' or not token:
+        return jsonify({'message': 'Bearer token is missing'}), 401
+
+      # decodes the json web token
+      # throws invalid signature error if the token signature is not valid
+      try:
+        decoded = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+      except jwt.InvalidSignatureError:
+        return jsonify({'message': 'Invalid auth token'}), 401
+
+      return func(decoded, *args, **kwargs)
+    return wrapper
+  return decorator 
 
 # Notes endpoints
 @app.route('/api/notes', methods=['GET'])
@@ -403,46 +434,27 @@ def login():
   username = request.json.get('username')
   password = request.json.get('password')
 
+  # searches for the user in the database
   user = session.query(Users).filter(Users.username==username).first()
   if not user:
     return jsonify({'message': 'Username is invalid'})
 
+  # validates the given password with bcrypt
   is_valid = user.validatepassword(password)
 
   if not is_valid:
     return jsonify({'message': 'Password is incorrect'})
   
+  # signs a new json web token 
   auth_token = jwt.encode({ 'user': user.as_dictionary()}, JWT_SECRET, algorithm='HS256' )
 
   return jsonify({'authToken': auth_token.decode('utf8')}), 201
 
+
 @app.route('/auth/refresh', methods=['POST'])
 @accept('application/json')
-def refresh():
-  # returns a new json web token when provided a valid token
-
-  # look for auth token in authorization header
-  bearer_token = request.headers.get('Authorization')
-
-  if not bearer_token:
-    return jsonify({'message': 'Authorization header is missing'}), 401
-
-  # authorization header should conform to bearer scheme
-  bearer_token = bearer_token.split(' ')
-  scheme = bearer_token[0]
-  token = bearer_token[1]
-
-  # return 401 if request does not contain a proper bearer token
-  if scheme != 'Bearer' or not token:
-    return jsonify({'message': 'Bearer token is missing'}), 401
-
-  # decodes the json web token
-  # throws invalid signature error if the token signature is not valid
-  try:
-    decoded = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-  except jwt.InvalidSignatureError:
-    return jsonify({'message': 'Invalid auth token'}), 401
-
+@jwt_auth()
+def refresh(decoded):
   # sign and return new token
   auth_token = jwt.encode({ 'user': decoded.get('user') }, JWT_SECRET, algorithm='HS256' )
 
