@@ -86,13 +86,18 @@ class Users(Base):
 
   id = Column(Integer, nullable=False, primary_key=True)
   # unique constraint on username attribute
+  # username and password are required fields but firstname and lastname are not
   username = Column(String, nullable=False, unique=True)
   password = Column(String, nullable=False)
+  firstname = Column(String, nullable=True)
+  lastname = Column(String, nullable=True)
 
   def as_dictionary(self):
     user = {
       "id": self.id,
-      "username": self.username
+      "username": self.username,
+      "firstname": self.firstname,
+      "lastname": self.lastname
     }
     return user
 
@@ -372,6 +377,80 @@ def delete_tag(id):
   session.delete(tag)
   session.commit()
   return '', 204
+
+@app.route('/api/users', methods=['POST'])
+@accept('application/json')
+def create_user():
+  username = request.json.get('username')
+  password = request.json.get('password')
+  firstname = request.json.get('firstname')
+  lastname = request.json.get('lastname')
+
+  new_user = Users(username=username, password=password, firstname=firstname, lastname=lastname)
+  user_dict = {
+    'username': username,
+    'password': password,
+    'firstname': firstname,
+    'lastname': lastname
+  }
+
+  # username and password are required fields
+  if not username or not password:
+    return jsonify({'message': 'Username or password is missing'}), 400
+  
+  # username and password must be strings
+  if not isinstance(username, str) or not isinstance(password, str):
+    return jsonify({'message': 'Username and password must be strings'}), 400
+
+  # leading and trailing whitespace not allowed in username or password
+  if username.strip() != username or password.strip() != password:
+    return jsonify({'message': 'Username and password cannot start or end with whitespace'}), 400
+
+  # set min and max number of characters for username and password
+  sized_fields = {
+    'username': {
+      'min': 5
+    },
+    'password': {
+      'min': 6,
+      'max': 72
+    }
+  }
+
+  too_small = None
+  too_large = None
+  min = None
+  max = None
+
+
+  # iterating through dictionary only iterates through keys
+  # use items() method on the dictionary to interate through key value pairs
+  for field, size in sized_fields.items():
+    if 'min' in size and size.get('min') > len(user_dict[field]):
+      too_small = field
+      min = size.get('min')
+      break
+
+    if 'max' in size and size.get('max') < len(user_dict[field]):
+      too_large = field
+      max = size.get('max')
+      break
+  
+  if too_small:
+    return jsonify({'message': f'{too_small} must be at least {min} characters long'}), 400
+  
+  if too_large:
+    return jsonify({'message': f'{too_large} must be at most {max} characters long'}), 400
+
+  user = session.query(Users).filter(Users.username==username).first()
+
+  if user:
+    return jsonify({'message': 'Username already exists'}), 400
+  
+  session.add(new_user)
+  session.commit()
+  
+  return jsonify(new_user.as_dictionary()), 201
 
 if __name__ == "__main__":
   app.run()
