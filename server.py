@@ -257,6 +257,9 @@ def post_note():
   content = data.get('content')
   tags = data.get('tags')
 
+  if not isinstance(tags, list):
+    return jsonify({'message': 'Tags is not a list'}), 400
+
   if not title:
     return jsonify({'message': 'Note name is required'}), 400
 
