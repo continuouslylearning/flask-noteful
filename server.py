@@ -49,16 +49,19 @@ class Notes(Base):
   title = Column(String, nullable=False)
   content = Column(String, nullable=True)
   folder_id = Column(Integer, ForeignKey(Folders.id), nullable=True)
+  # user_id = Column(Integer, ForeignKey(Users.id), nullable=False)
   # specify delete on cascade constraint for records in 'note_tags' table
   # when note is deleted, referencing records in note_tags are deleted
-  notes_tags = relationship('Note_tags', cascade='delete')
+  note_tags = relationship('Note_tags', cascade='delete')
 
   def as_dictionary(self):
     note = {
         "id": self.id,
         "title": self.title,
         "content": self.content,
-        "folder_id": self.folder_id
+        "folder_id": self.folder_id,
+        'tags': [tag.tag_id for tag in self.note_tags]
+        # "user_id": self.user_id
     }
     return note
 
@@ -84,6 +87,12 @@ class Note_tags(Base):
   # define a composite primary key consisting of two columns
   note_id = Column(Integer, ForeignKey(Notes.id), nullable=False, primary_key=True)
   tag_id = Column(Integer, ForeignKey(Tags.id), nullable=False, primary_key=True)
+
+  def as_dictionary(self):
+    note_tag = {
+      'tag_id': self.tag_id
+    }
+    return note_tag
 
 class Users(Base):
   __tablename__ = 'users'
@@ -168,9 +177,11 @@ def jwt_auth():
       except jwt.InvalidSignatureError:
         return jsonify({'message': 'Invalid auth token'}), 401
 
+      # pass token payload to view function if authentication is successful
       return func(decoded, *args, **kwargs)
     return wrapper
   return decorator 
+
 
 # Notes endpoints
 @app.route('/api/notes', methods=['GET'])
@@ -236,6 +247,7 @@ def update_note(id):
 
 @app.route('/api/notes', methods=['POST'])
 @accept('application/json')
+# @jwt_auth(payload)
 def post_note():
 
   data = request.json
@@ -243,6 +255,7 @@ def post_note():
   title = data.get('title')
   folder_id = data.get('folder_id')
   content = data.get('content')
+  tags = data.get('tags')
 
   if not title:
     return jsonify({'message': 'Note name is required'}), 400
@@ -254,10 +267,26 @@ def post_note():
     if not folder:
       return jsonify({ 'message': 'Folder id is not valid'}), 400
 
+  # call flush before adding note_tags to session to make note id available
   note = Notes(title=title, content=content, folder_id=folder_id)
   session.add(note)
-  session.commit()
+  session.flush()
+
+  # add note_tags to session
+  # calling commit persists the transaction into the database
+  try: 
+    for tag in tags:
+      new_tag = Note_tags(note_id=note.id, tag_id=tag)
+      session.add(new_tag)
+    session.commit()
+  except IntegrityError:
+    # integrity error if thrown if a tag id is invalid
+    # call rollback to reset current transaction
+    session.rollback()
+    return jsonify({'message': 'Invalid tag id'}), 400 
+  print([tag.as_dictionary() for tag in note.note_tags])
   return jsonify(note.as_dictionary()), 201
+
 
 @app.route('/api/notes/<int:id>', methods=['DELETE'])
 def delete_note(id):
@@ -451,16 +480,14 @@ def login():
   return jsonify({'authToken': auth_token.decode('utf8')}), 201
 
 
+# decorate refresh endpoint with jwt authentication function
 @app.route('/auth/refresh', methods=['POST'])
 @accept('application/json')
 @jwt_auth()
 def refresh(decoded):
   # sign and return new token
   auth_token = jwt.encode({ 'user': decoded.get('user') }, JWT_SECRET, algorithm='HS256' )
-
   return jsonify({'authToken': auth_token.decode('utf8')}), 201
-
-
 
 
 @app.route('/api/users', methods=['POST'])
