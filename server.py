@@ -3,7 +3,7 @@ from functools import wraps
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, DataError
 from sqlalchemy.dialects.postgresql import BYTEA
 import os
 import jwt
@@ -60,7 +60,7 @@ class Notes(Base):
         "title": self.title,
         "content": self.content,
         "folder_id": self.folder_id,
-        'tags': [tag.tag_id for tag in self.note_tags]
+        'tags': [tag.tag_id for tag in self.note_tags] if self.note_tags else None
         # "user_id": self.user_id
     }
     return note
@@ -210,7 +210,7 @@ def get_note(id):
   return jsonify(note.as_dictionary())
 
 
-@app.route('/api/notes/<id>', methods=['PUT'])
+@app.route('/api/notes/<int:id>', methods=['PUT'])
 @accept('application/json')
 def update_note(id):
   
@@ -222,6 +222,10 @@ def update_note(id):
   title = data.get('title')
   folder_id = data.get('folder_id')
   content = data.get('content')
+  tags = data.get('tags')
+
+  if tags and not isinstance(tags, list):
+    return jsonify({'message': 'Tags is not a list'}), 400
 
   # None and empty string are both falsey in Python
   # returns 400 if title key is missing or value of title key is an empty string
@@ -241,7 +245,23 @@ def update_note(id):
   updated_note.title = title
   updated_note.folder_id = folder_id
   updated_note.content = content 
-  session.commit()
+  session.flush()
+
+  session.query(Note_tags).filter(Note_tags.note_id==id).delete()
+
+  try: 
+    if tags:
+      for tag in tags:
+        new_tag = Note_tags(note_id=id, tag_id=tag)
+        session.add(new_tag)
+    session.commit()
+    
+  except (IntegrityError, DataError):
+    # integrity error is thrown if a tag id is invalid
+    # data error is thrown if a tag id is the wrong type
+    # call rollback to reset current transaction
+    session.rollback()
+    return jsonify({'message': 'Tags list contains an invalid id'}), 400 
 
   return jsonify(updated_note.as_dictionary()), 201
 
@@ -257,7 +277,7 @@ def post_note():
   content = data.get('content')
   tags = data.get('tags')
 
-  if not isinstance(tags, list):
+  if tags and not isinstance(tags, list):
     return jsonify({'message': 'Tags is not a list'}), 400
 
   if not title:
@@ -278,16 +298,19 @@ def post_note():
   # add note_tags to session
   # calling commit persists the transaction into the database
   try: 
-    for tag in tags:
-      new_tag = Note_tags(note_id=note.id, tag_id=tag)
-      session.add(new_tag)
+    if tags:
+      for tag in tags:
+        new_tag = Note_tags(note_id=note.id, tag_id=tag)
+        session.add(new_tag)
     session.commit()
-  except IntegrityError:
-    # integrity error if thrown if a tag id is invalid
+
+  except (IntegrityError, DataError):
+    # integrity error is thrown if a tag id is invalid
+    # data error is thrown if a tag id is the wrong type
     # call rollback to reset current transaction
     session.rollback()
-    return jsonify({'message': 'Invalid tag id'}), 400 
-  print([tag.as_dictionary() for tag in note.note_tags])
+    return jsonify({'message': 'Tags list contains an invalid id'}), 400 
+
   return jsonify(note.as_dictionary()), 201
 
 

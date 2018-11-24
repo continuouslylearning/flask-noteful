@@ -1,4 +1,3 @@
--- psql -U dev -d noteful-app -f C:\Users\owner\projects\timothy-noteful-v2\db\noteful.sql
 -- SELECT setval('notes_id_seq', (SELECT MAX(notes.id) FROM notes) + 1);
 -- DROP TABLE IF EXISTS notes_tags;
 -- DROP TABLE IF EXISTS notes;
